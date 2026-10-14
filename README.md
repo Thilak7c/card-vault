@@ -1,36 +1,60 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Card Vault
 
-## Getting Started
+A private web app for business cards. Photograph a card, AI reads it, you check the fields, and it goes into a searchable directory you can also ask questions about.
 
-First, run the development server:
+Next.js 16 (App Router) · Tailwind 4 · TanStack Query · Drizzle + Turso (libSQL) · Auth.js v5 · Groq · Tesseract.js
+
+## Run locally
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env.local      # then fill it in (see below)
+npm run db:migrate              # creates tables in local.db (or your Turso DB)
+npm run dev                     # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+If `TURSO_DATABASE_URL` is not set, the app uses a local SQLite file, `local.db`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Variable | Notes |
+|---|---|
+| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | `turso db show <db> --url`, `turso db tokens create <db>` |
+| `GROQ_API_KEY` | Without it, Scan offers manual entry and Ask is unavailable |
+| `GROQ_VISION_MODEL` | A current Groq vision model (check Groq's model list) |
+| `GROQ_CHAT_MODEL` | A current Groq model with tool calling |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Scripts
 
-## Learn More
+| Command | What it does |
+|---|---|
+| `npm run db:generate` | Create a migration after editing `src/db/schema.ts` |
+| `npm run db:migrate` | Apply migrations to the database in `.env.local` |
+| `npm run db:studio` | Browse the database |
+| `npm run seed -- 2000` | Add fake cards (refuses a remote DB unless you pass `--remote`) |
+| `npm run typecheck` / `npm run lint` | Checks |
 
-To learn more about Next.js, take a look at the following resources:
+## Deploy (Vercel + Turso)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. `turso db create card-vault`, then get the URL and a token.
+2. With those set in `.env.local`, run `npm run db:migrate`.
+3. Push to a **private** GitHub repo and import it in Vercel.
+4. Add every variable above in Project Settings → Environment Variables.
+5. Deploy and use "Add to Home Screen" on your phone.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Layout
 
-## Deploy on Vercel
+```
+src/
+  db/schema.ts            cards, card_images, events, tags, card_tags
+  lib/cards.ts            save, search, duplicates, export (server only)
+  lib/agent.ts            Ask agent: Groq tool-calling loop over read-only tools
+  lib/ocr.ts              on-device Tesseract fallback / Private mode
+  app/api/*               extract, cards, cards/[id], cards/duplicates, events, tags, export, import, ask
+  app/(app)/*             Cards, card detail, Scan + Review, Events, Ask, Settings
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Notes
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Rate limits (extract, ask) are kept in memory per server instance, so on Vercel they are a speed bump, not a hard limit.
+- Ask only renders links that start with `/cards/`. Any other link in an answer is shown as plain text.
+- Private mode and the last-export date are saved per device, in the browser.
+- Imports with images can exceed Vercel's request body limit (about 4.5 MB). If that happens, import a backup made without images.

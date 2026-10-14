@@ -1,0 +1,12 @@
+import "server-only";
+import { drizzle } from "drizzle-orm/libsql";
+import { createClient } from "@libsql/client";
+import * as schema from "./schema";
+
+const client = createClient({
+  url: process.env.TURSO_DATABASE_URL ?? "file:local.db",
+  authToken: process.env.TURSO_AUTH_TOKEN,
+});
+
+export const db = drizzle(client, { schema });
+export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
